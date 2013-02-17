@@ -6,79 +6,82 @@ database_file = settings.environment.to_s+".sqlite3"
 db = SQLite3::Database.new database_file
 db.results_as_hash = true
 db.execute "
-	CREATE TABLE IF NOT EXISTS guestbook (
-		user_id INTEGER,
-		message VARCHAR(255)
-	);
-";
-
-db.execute "
 	CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name VARCHAR(255) UNIQUE,
-                password VARCHAR(255)
+		email VARCHAR(100),
+		time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		visit_counter INTEGER DEFAULT '1' 
 	);
 ";
 
 get '/' do
-	@messages = db.execute("SELECT * FROM guestbook JOIN users ON users.id = guestbook.user_id");
 	erb File.read('our_form.erb')
 end
 
 post '/' do
-	@name = params['name']
-	result = db.execute("SELECT * FROM users WHERE name = ?", @name) || []
-	if result.length>0
+	@email = params['email'].downcase
+	result = db.execute("SELECT * FROM users WHERE email = ?", @email) || []
+	if result.length>0 #this field checks to see if a record already exists based on that email address
+		@visit_counter = result.shift['visit_counter'] + 1
+		db.execute("
+		UPDATE users 
+		SET time = datetime('now'), visit_counter = ?
+		WHERE email = ?
+		", @visit_counter, @email);
+	else
+		@visit_counter = 1 #in the future, we may want to revisit this visit counter getting set to 1 
 		db.execute(
-			"INSERT INTO guestbook VALUES( ?, ? )",
-			result.shift['id'], params['message']
+			"INSERT INTO users(email) VALUES ( ?)",
+			@email
 		);
-		erb File.read('thanks.erb')
 	end
+	erb File.read('thanks.erb')
 end
 
-get '/users/:name' do
 
-	@name = params['name']
+#create session so users are remembered on the site.
+
+get '/users/:email' do
+
+	@email = params['email']
 	@messages = db.execute("
 		SELECT * FROM users 
-		JOIN guestbook 
-		ON users.id = guestbook.user_id 
-		WHERE name = ?
-	", params['name'])
+		JOIN users 
+		ON users.id = users.user_id 
+		WHERE email = ?
+	", params['email'])
 
 	erb File.read('user.erb')
 
 end
 
-get '/users/:name/edit' do
+get '/users/:email/edit' do
 
-	@name = params['name']
-	result = db.execute("SELECT * FROM users WHERE name = ?", params['name'])
+	@email = params['email']
+	result = db.execute("SELECT * FROM users WHERE email = ?", params['email'])
 	@user = result.shift || false
 	erb File.read('user_edit.erb')
 
 end
 
-post '/users/:old_name' do
+post '/users/:old_email' do
 
 	db.execute("
-		UPDATE users SET name = ? WHERE name = ?;
-	", params['name'], params['old_name'])
+		UPDATE users SET email = ? WHERE email = ?;
+	", params['email'], params['old_email'])
 
 end
 
-# Create a new user (name, password)
+# Create a new user (email, password)
 post '/users/' do
-  db.execute("INSERT into users(name, password) VALUES (?, ?)",
-             params['name'], params['password'])
+  db.execute("INSERT into users(email, password) VALUES (?, ?)",
+             params['email'], params['password'])
 end
 
-# Login the user (name, password)
+# Login the user (email, password)
 post '/login' do
-  @name = params['name']
-  result = db.execute("SELECT * FROM users WHERE name = ? and password = ?", 
-                      @name, params['password']) || []
+  @email = params['email']
+  result = db.execute("SELECT * FROM users WHERE email = ? and password = ?", 
+                      @email, params['password']) || []
   if result.length>0
     erb File.read('welcome.erb')
   end

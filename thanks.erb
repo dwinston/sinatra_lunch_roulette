@@ -1,1 +1,5 @@
-Thanks for leaving a message, <%= @name %>!
+Thanks for using Lunch Roulette, <%= @email.split('_')[0].capitalize %>!
+
+<% if @visit_counter > 1 %>
+	Wow, you have signed up <%= @visit_counter %> times! Way to go! 
+<% end %>
